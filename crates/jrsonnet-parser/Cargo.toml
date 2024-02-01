@@ -37,3 +37,6 @@ peg.workspace = true
 
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
 structdump = { workspace = true, features = ["derive"], optional = true }
+
+[dev-dependencies]
+pretty_assertions = { version = "1.4.0" }

@@ -96,9 +96,9 @@ pub fn stdlib_expr() -> LocExpr {
 
 		jrsonnet_parser::parse(
 			STDLIB_STR,
-			&jrsonnet_parser::ParserSettings {
-				source: Source::new_virtual("<std>".into(), STDLIB_STR.into()),
-			},
+			&jrsonnet_parser::ParserSettings::new (
+				Source::new_virtual("<std>".into(), STDLIB_STR.into()),
+			),
 		)
 		.unwrap()
 	}

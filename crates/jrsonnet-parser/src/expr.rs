@@ -329,6 +329,14 @@ pub enum ObjBody {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Trace)]
+pub struct TableBody {
+	pub header: Vec<LocExpr>,
+	pub rows: Vec<Vec<LocExpr>>,
+}
+
+#[cfg_attr(feature = "structdump", derive(Codegen))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Trace)]
 pub enum LiteralType {
 	This,
@@ -361,6 +369,9 @@ pub enum Expr {
 	Num(f64),
 	/// Variable name: test
 	Var(IStr),
+
+	/// Table (a.k.a table of objects)
+	Table(TableBody),
 
 	/// Array of expressions: [1, 2, "Hello"]
 	Arr(Vec<LocExpr>),

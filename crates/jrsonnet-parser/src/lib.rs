@@ -15,6 +15,26 @@ pub use source::{Source, SourceDirectory, SourceFile, SourcePath, SourcePathT, S
 
 pub struct ParserSettings {
 	pub source: Source,
+	pub table_mode: bool,
+	pub in_table: bool
+}
+
+impl ParserSettings {
+	pub fn new(source: Source) -> Self {
+		Self {
+			source,
+			table_mode: true,
+			in_table: false
+		}
+	}
+	fn in_table(&self) -> Self {
+		Self {
+			source: self.source.clone(),
+			table_mode: false,
+			in_table: true
+		}
+	}
+	
 }
 
 macro_rules! expr_bin {
@@ -43,6 +63,7 @@ parser! {
 
 		rule single_whitespace() = quiet!{([' ' | '\r' | '\n' | '\t'] / comment())} / expected!("<whitespace>")
 		rule _() = quiet!{([' ' | '\r' | '\n' | '\t']+) / comment()}* / expected!("<whitespace>")
+		rule _inline_whitespace() = quiet!{([' ' | '\t']+) / comment()}* / expected!("<whitespace>")
 
 		/// For comma-delimited elements
 		rule comma() = quiet!{_ "," _} / expected!("<comma>")
@@ -225,6 +246,55 @@ parser! {
 				specs.extend(others.unwrap_or_default());
 				Expr::ArrComp(expr, specs)
 			}
+
+		rule pipe() = quiet!{_ "|" _} / expected!("<pipe>")
+
+		// This is markdown table having rules:
+		// 1. First line is header
+		// 2. Second line is separator of at least three hyphens per column, using pipes `|` to separate each column
+		// 3. All other lines are rows, with columns separated by pipes `|`
+		// 4. All rows must have the same number of columns as the header
+		// 5. That also allows parser to know when table is ended
+		// Example:
+		//           | Name | Age | // Note that the `|` comes 
+		// | --- | --- | // Still valid table even if there is no space between first `|`
+		// | John | 20 | 
+		pub rule table_expr(s: &ParserSettings) -> Expr = 
+			table_guard(s)
+			table: table_expr_inner(&s.in_table()) { table }
+
+		rule table_expr_inner(s: &ParserSettings) -> Expr = 
+			header: table_header(s)
+			table_header_delimiter(header.len()) "\n"
+			rows:(table_row(s, header.len())) ++ "\n"
+			{ Expr::Table(expr::TableBody{header, rows}) }
+
+		rule table_guard(s: &ParserSettings) -> ()
+		= {?
+			match s.table_mode {
+				true => Ok(()),
+				false => Err("Not a table")
+			}
+		}
+
+		rule table_header(s: &ParserSettings) -> Vec<LocExpr> =
+			"|" _inline_whitespace() header:(expr(s) ++ pipe()) _inline_whitespace() "|" _inline_whitespace() "\n" { 
+				// if (header.len() > 0) {
+				// 	// dbg!(&header);
+				// }
+				header 
+			}
+
+		rule table_header_delimiter(len: usize) -> () =
+			_inline_whitespace() pipe() (_inline_whitespace() "-"*<3,> _inline_whitespace()) **<{len}> pipe() _inline_whitespace() "|" _inline_whitespace()
+
+		rule table_row(s: &ParserSettings, len: usize) -> Vec<LocExpr> =
+			_inline_whitespace() pipe() _inline_whitespace() rows: (expr(s) **<{len}> pipe()) _inline_whitespace() "|" _inline_whitespace() {
+				// dbg!(&rows)
+				rows
+			}
+
+
 		pub rule number_expr(s: &ParserSettings) -> Expr
 			= n:number() { expr::Expr::Num(n) }
 		pub rule var_expr(s: &ParserSettings) -> Expr
@@ -285,6 +355,17 @@ parser! {
 
 		rule binop(x: rule<()>) -> ()
 			= quiet!{ x() } / expected!("<binary op>")
+
+		rule binop_not_table(s: &ParserSettings, x: rule<()> ) -> ()
+			= 
+			quiet!{ binop_not_table_guard(s) x() } / expected!("<binary op>")
+
+		rule binop_not_table_guard(s: &ParserSettings) -> ()
+			= {? match s.in_table {
+				true => Err("Not a binary op"),
+				false => Ok(())
+			}}
+
 		rule unaryop(x: rule<()>) -> ()
 			= quiet!{ x() } / expected!("<unary op>")
 
@@ -295,8 +376,14 @@ parser! {
 			}
 		use BinaryOpType::*;
 		use UnaryOpType::*;
+
+		rule table_loc_expr(s: &ParserSettings) -> LocExpr
+			= 
+			start:position!() v:table_expr(s) end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
+
 		rule expr(s: &ParserSettings) -> LocExpr
-			= precedence! {
+			= table_loc_expr(s) /
+			precedence! {
 				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
@@ -307,7 +394,7 @@ parser! {
 				--
 				a:(@) _ binop(<"&&">) _ b:@ {expr_bin!(a And b)}
 				--
-				a:(@) _ binop(<"|">) _ b:@ {expr_bin!(a BitOr b)}
+				a:(@) _ binop_not_table(s, <"|">) _ b:@ {expr_bin!(a BitOr b)}
 				--
 				a:@ _ binop(<"^">) _ b:(@) {expr_bin!(a BitXor b)}
 				--
@@ -380,15 +467,15 @@ pub mod tests {
 	use BinaryOpType::*;
 
 	use super::{expr::*, parse};
+	use pretty_assertions::assert_eq;
 	use crate::{source::Source, ParserSettings};
 
 	macro_rules! parse {
 		($s:expr) => {
 			parse(
 				$s,
-				&ParserSettings {
-					source: Source::new_virtual("<test>".into(), IStr::empty()),
-				},
+				&ParserSettings::new( Source::new_virtual("<test>".into(), IStr::empty()), )
+				,
 			)
 			.unwrap()
 		};
@@ -425,6 +512,57 @@ pub mod tests {
 			parse!("|||\n   Hello world!\n    a\n |||"),
 			el!(Expr::Str("Hello world!\n a\n".into()), 0, 30),
 		);
+	}
+
+	#[test]
+	fn table() {
+		let input = r#"| "Name" | "Age" |
+			| --- | --- |
+			| "John" | 20 |"#;
+		assert_eq!(
+			parse!(&input),
+			el!(Expr::Table(TableBody {
+				header: vec![
+					el!(Expr::Str("Name".into()), 2, 8),
+					el!(Expr::Str("Age".into()), 11, 16),
+				],
+				rows: vec![vec![
+					el!(Expr::Str("John".into()), 41, 47),
+					el!(Expr::Num(20.0), 50, 52),
+				]],
+			}), 0, 54),
+		)
+	}
+
+	#[test]
+	fn local_table() {
+		let input = r#"local x = | "Name" | "Age" |
+			| --- | --- |
+			| "John" | 20 |;null"#;
+		assert_eq!(
+			parse!(&input),
+			el!(
+				Expr::LocalExpr(vec![
+					BindSpec::Field {
+						into: Destruct::Full("x".into()),
+						value: el!(
+							Expr::Table(TableBody {
+								header: vec![
+									el!(Expr::Str("Name".into()), 12, 18),
+									el!(Expr::Str("Age".into()), 21, 26),
+								],
+								rows: vec![vec![
+									el!(Expr::Str("John".into()), 51, 57),
+									el!(Expr::Num(20.0), 60, 62),
+								]],
+							}),
+							10, 64
+						)
+					}
+				], 
+				el!(Expr::Literal(LiteralType::Null), 65, 69)
+			), 0, 69),
+		)
 	}
 
 	#[test]
@@ -750,7 +888,7 @@ pub mod tests {
 		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
-			&ParserSettings { source: file_name },
+			&ParserSettings::new (file_name),
 		)
 		.unwrap();
 		assert_eq!(

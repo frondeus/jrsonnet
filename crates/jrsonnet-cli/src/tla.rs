@@ -54,9 +54,9 @@ impl TlaOpts {
 				TlaArg::Code(
 					jrsonnet_parser::parse(
 						code,
-						&ParserSettings {
-							source: source.clone(),
-						},
+						&ParserSettings ::new(
+							source.clone(),
+						),
 					)
 					.map_err(|e| ErrorKind::ImportSyntaxError {
 						path: source,

@@ -328,7 +328,7 @@ where
 						let source = Source::new(path.clone(), code.clone());
 						// If failed - then skip import
 						file.parsed =
-							jrsonnet_parser::parse(&code, &ParserSettings { source }).ok();
+							jrsonnet_parser::parse(&code, &ParserSettings::new ( source )).ok();
 						if let Some(parsed) = &file.parsed {
 							let mut imports = FoundImports(vec![]);
 							find_imports(parsed, &mut imports);

@@ -3,8 +3,7 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility
 };
 use jrsonnet_types::ValType;
 
@@ -570,6 +569,39 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
 			evaluate(ctx, &returned.clone())?
 		}
+		Table(table) => {
+			let rows = 
+			table.rows.iter().cloned()
+				.map(|row| {
+					let mut location = row.get(0).unwrap().1.clone();
+					let last_loc = &row.last().unwrap().1;
+					location.2 = last_loc.2;
+					
+					let members: Vec<Member> = row.into_iter()
+						.enumerate()
+						.map(|(idx, value)| {
+							let header = table.header[idx].clone();
+							Member::Field(FieldMember {
+						        name: FieldName::Dyn(header),
+						        plus: false,
+						        params: None,
+						        visibility: Visibility::Normal,
+						        value,
+						    })
+						})
+						.collect();
+
+					LocExpr(
+						Rc::new(Expr::Obj(ObjBody::MemberList(members))),
+						location
+					)
+				})
+			;
+
+			Val::Arr(ArrValue::expr(ctx,   rows
+				
+			))
+		},
 		Arr(items) => {
 			if items.is_empty() {
 				Val::Arr(ArrValue::empty())

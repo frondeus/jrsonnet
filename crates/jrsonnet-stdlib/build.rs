@@ -8,12 +8,12 @@ fn main() {
 
 		let parsed = parse(
 			include_str!("./src/std.jsonnet"),
-			&ParserSettings {
-				source: Source::new_virtual(
+			&ParserSettings::new (
+				Source::new_virtual(
 					"<std>".into(),
 					include_str!("./src/std.jsonnet").into(),
-				),
-			},
+				)
+			),
 		)
 		.expect("parse");
 

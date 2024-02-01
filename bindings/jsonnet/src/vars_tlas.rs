@@ -87,9 +87,7 @@ pub unsafe extern "C" fn jsonnet_tla_code(vm: &mut VM, name: *const c_char, code
 	let code: IStr = code.to_str().expect("code is not utf-8").into();
 	let code = jrsonnet_parser::parse(
 		&code,
-		&ParserSettings {
-			source: Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.clone()),
-		},
+		&ParserSettings::new ( Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.clone()), ),
 	)
 	.expect("can't parse TLA code");
 

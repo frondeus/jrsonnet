@@ -350,9 +350,9 @@ impl State {
 			file.parsed = Some(
 				jrsonnet_parser::parse(
 					&code,
-					&ParserSettings {
-						source: file_name.clone(),
-					},
+					&ParserSettings::new (
+						file_name.clone(),
+					),
 				)
 				.map_err(|e| ImportSyntaxError {
 					path: file_name.clone(),
@@ -522,9 +522,9 @@ impl State {
 		let source = Source::new_virtual(name.into(), code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
-			&ParserSettings {
-				source: source.clone(),
-			},
+			&ParserSettings ::new(
+				 source.clone(),
+			),
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source.clone(),
@@ -543,9 +543,9 @@ impl State {
 		let source = Source::new_virtual(name.into(), code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
-			&ParserSettings {
-				source: source.clone(),
-			},
+			&ParserSettings::new (
+				source.clone(),
+			),
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source.clone(),

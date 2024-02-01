@@ -355,9 +355,9 @@ impl ContextInitializer {
 		let source = extvar_source(name, code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
+			&jrsonnet_parser::ParserSettings::new (
+				source.clone(),
+			),
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source,
