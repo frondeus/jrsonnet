@@ -425,7 +425,7 @@ parser! {
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
 				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
-				indexable:(@) _ parts:index_part(s)+ {Expr::Index{indexable, parts}}
+				indexable:(@) _ parts:index_part(s)+ {Expr::Index(IndexBody{indexable, parts})}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
 				--
@@ -771,14 +771,14 @@ pub mod tests {
 					el!(
 						Apply(
 							el!(
-								Index {
+								Expr::Index(super::IndexBody {
 									indexable: el!(Var("std".into()), 1, 4),
 									parts: vec![IndexPart {
 										value: el!(Str("deepJoin".into()), 5, 13),
 										#[cfg(feature = "exp-null-coaelse")]
 										null_coaelse: false,
 									}],
-								},
+								}),
 								1,
 								13
 							),

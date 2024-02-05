@@ -416,10 +416,7 @@ pub enum Expr {
 	/// a(b, c)
 	Apply(LocExpr, ArgsDesc, bool),
 	/// a[b], a.b, a?.b
-	Index {
-		indexable: LocExpr,
-		parts: Vec<IndexPart>,
-	},
+	Index(IndexBody),
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
 	/// if true == false then 1 else 2
@@ -429,6 +426,30 @@ pub enum Expr {
 		cond_else: Option<LocExpr>,
 	},
 	Slice(LocExpr, SliceDesc),
+}
+
+impl Expr {
+	pub fn as_index(&self) -> Option<&IndexBody> {
+		match self {
+			Expr::Index(i) => Some(i),
+			_ => None,
+		}
+	}
+
+	pub fn as_index_mut(&mut self) -> Option<&mut IndexBody> {
+		match self {
+			Expr::Index(i) => Some(i),
+			_ => None,
+		}
+	}
+}
+
+#[cfg_attr(feature = "structdump", derive(Codegen))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Trace)]
+pub struct IndexBody {
+	pub indexable: LocExpr,
+	pub parts: Vec<IndexPart>,
 }
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]

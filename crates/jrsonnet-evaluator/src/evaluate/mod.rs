@@ -3,7 +3,7 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData, IfSpecData, IndexBody, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility
 };
 use jrsonnet_types::ValType;
 
@@ -445,7 +445,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index { indexable, parts } => {
+		Index (IndexBody {indexable, parts }) => {
 			let mut parts = parts.iter();
 			let mut indexable = match &indexable {
 				// Cheaper to execute than creating object with overriden `this`
