@@ -152,6 +152,8 @@ enum CacheValue {
 	Errored(Error),
 }
 
+pub type Metadata<'a> = &'a ObjMember;
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Trace)]
 #[trace(tracking(force))]
@@ -199,6 +201,8 @@ pub trait ObjectLike: Trace + Any + Debug {
 	fn field_visibility(&self, field: IStr) -> Option<Visibility>;
 
 	fn run_assertions_raw(&self, this: ObjValue) -> Result<()>;
+
+	fn get_meta_for(&self, key: IStr, this: ObjValue) -> Result<Option<Metadata<'_>>>;
 }
 
 #[derive(Clone, Trace)]
@@ -269,6 +273,10 @@ impl ObjectLike for EmptyObject {
 	fn field_visibility(&self, _field: IStr) -> Option<Visibility> {
 		None
 	}
+
+	fn get_meta_for(&self, _key: IStr, _this: ObjValue) -> Result<Option<Metadata<'_>>> {
+		Ok(None)
+	}
 }
 
 #[derive(Trace, Debug)]
@@ -314,6 +322,10 @@ impl ObjectLike for ThisOverride {
 
 	fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
 		self.inner.get_for(key, this)
+	}
+
+	fn get_meta_for(&self, key: IStr, this: ObjValue) -> Result<Option<Metadata<'_>>> {
+		self.inner.get_meta_for(key, this)
 	}
 
 	fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
@@ -402,6 +414,15 @@ impl ObjValue {
 		self.0.get_for(key, this)
 	}
 
+	pub fn get_meta(&self, key: IStr) -> Result<Option<Metadata<'_>>> {
+		self.run_assertions()?;
+		self.get_meta_for(key, self.0.this().unwrap_or_else(|| self.clone()))
+	}
+
+	pub fn get_meta_for(&self, key: IStr, this: ObjValue) -> Result<Option<Metadata<'_>>> {
+		self.0.get_meta_for(key, this)
+	}
+	
 	pub fn get_or_bail(&self, key: IStr) -> Result<Val> {
 		let Some(value) = self.get(key.clone())? else {
 			let suggestions = suggest_object_fields(self, key.clone());
@@ -745,6 +766,17 @@ impl ObjectLike for OopObject {
 		);
 		Ok(value)
 	}
+
+	fn get_meta_for(&self, key: IStr, this: ObjValue) -> Result<Option<Metadata<'_>>> {
+		match self.this_entries.get(&key) {
+			Some(m) => Ok(Some(m)),
+			None => match &self.sup {
+				Some(super_obj) => super_obj.get_meta_for(key, this),
+				None => Ok(None),
+			},
+		}
+	}
+
 	fn get_for_uncached(&self, key: IStr, real_this: ObjValue) -> Result<Option<Val>> {
 		match (self.this_entries.get(&key), &self.sup) {
 			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
