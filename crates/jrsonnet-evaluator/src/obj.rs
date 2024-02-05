@@ -203,6 +203,7 @@ pub trait ObjectLike: Trace + Any + Debug {
 	fn run_assertions_raw(&self, this: ObjValue) -> Result<()>;
 
 	fn get_meta_for(&self, key: IStr, this: ObjValue) -> Result<Option<Metadata<'_>>>;
+	fn has_super(&self) -> bool;
 }
 
 #[derive(Clone, Trace)]
@@ -277,6 +278,9 @@ impl ObjectLike for EmptyObject {
 	fn get_meta_for(&self, _key: IStr, _this: ObjValue) -> Result<Option<Metadata<'_>>> {
 		Ok(None)
 	}
+	fn has_super(&self) -> bool {
+		false
+	}
 }
 
 #[derive(Trace, Debug)]
@@ -339,6 +343,9 @@ impl ObjectLike for ThisOverride {
 	fn run_assertions_raw(&self, this: ObjValue) -> Result<()> {
 		self.inner.run_assertions_raw(this)
 	}
+	fn has_super(&self) -> bool {
+		self.inner.has_super()
+	}
 }
 
 impl ObjValue {
@@ -396,6 +403,9 @@ impl ObjValue {
 	}
 	pub fn has_field(&self, name: IStr) -> bool {
 		self.0.has_field(name)
+	}
+	pub fn has_super(&self) -> bool {
+		self.0.has_super()
 	}
 	pub fn has_field_ex(&self, name: IStr, include_hidden: bool) -> bool {
 		if include_hidden {
@@ -737,6 +747,10 @@ impl ObjectLike for OopObject {
 	fn has_field(&self, name: IStr) -> bool {
 		self.field_visibility(name)
 			.map_or(false, |v| v.is_visible())
+	}
+
+	fn has_super(&self) -> bool {
+		self.sup.is_some()
 	}
 
 	fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
