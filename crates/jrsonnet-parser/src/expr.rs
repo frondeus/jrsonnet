@@ -454,7 +454,7 @@ pub struct IndexBody {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Clone, Debug, PartialEq, Trace)]
 pub struct IndexPart {
 	pub value: LocExpr,
 	#[cfg(feature = "exp-null-coaelse")]
