@@ -442,6 +442,17 @@ impl Expr {
 			_ => None,
 		}
 	}
+
+	pub fn is_atom(&self) -> bool {
+		match self {
+		    Expr::Literal(LiteralType::Null) |
+			Expr::Literal(LiteralType::True) |
+			Expr::Literal(LiteralType::False) |
+		    Expr::Str(_) |
+		    Expr::Num(_) => true,
+			_ => false
+		}
+	}
 }
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
