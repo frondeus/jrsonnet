@@ -491,6 +491,15 @@ impl ExprLocation {
 	pub fn belongs_to(&self, other: &ExprLocation) -> bool {
 		other.0 == self.0 && other.1 <= self.1 && other.2 >= self.2
 	}
+
+	pub fn code(&self) -> &str {
+		let code = self.0.code();
+		let range = std::ops::Range::<usize> {
+			start: self.1 as usize,
+			end: self.2 as usize,
+		};
+		&code[range]
+	}
 }
 
 #[cfg(target_pointer_width = "64")]
