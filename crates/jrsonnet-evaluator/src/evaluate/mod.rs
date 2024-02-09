@@ -650,7 +650,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
 		ObjExtend(a, b) => evaluate_add_op(
 			&evaluate(ctx.clone(), a)?,
-			&Val::Obj(evaluate_object(ctx, b)?),
+			&Val::Obj(evaluate_object(ctx, &b.body)?),
 		)?,
 		Apply(value, args, tailstrict) => {
 			evaluate_apply(ctx, value, args, CallLocation::new(loc), *tailstrict)?

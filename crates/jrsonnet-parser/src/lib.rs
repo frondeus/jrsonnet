@@ -427,7 +427,7 @@ parser! {
 				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
 				indexable:(@) _ parts:index_part(s)+ {Expr::Index(IndexBody{indexable, parts})}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
-				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
+				a:(@) _ right_start:position!() "{" _ body:objinside(s) _ "}" right_end:position!() {Expr::ObjExtend(a, LocObjBody { body, location: ExprLocation(s.source.clone(), right_start as u32, right_end as u32) })}
 				--
 				e:expr_basic(s) {e}
 				"(" _ e:expr(s) _ ")" {Expr::Parened(e)}
@@ -491,6 +491,16 @@ pub mod tests {
 					$to,
 				),
 			)
+		};
+	}
+
+	macro_rules! loc {
+		($from:expr, $to:expr$(,)?) => {
+			ExprLocation(
+				Source::new_virtual("<test>".into(), IStr::empty()),
+				$from,
+				$to,
+			),
 		};
 	}
 
@@ -898,7 +908,9 @@ pub mod tests {
 					el!(
 						ObjExtend(
 							el!(Obj(ObjBody::MemberList(vec![])), 0, 2),
-							ObjBody::MemberList(vec![
+							LocObjBody {
+								location: loc!(3, 20),
+								body: ObjBody::MemberList(vec![
 								Member::BindStmt(BindSpec::Field {
 									into: Destruct::Full("x".into()),
 									value: el!(Num(1.0), 15, 16)
@@ -911,6 +923,7 @@ pub mod tests {
 									value: el!(Var("x".into()), 21, 22),
 								})
 							])
+							}
 						),
 						0,
 						24

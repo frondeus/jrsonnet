@@ -330,6 +330,14 @@ pub enum ObjBody {
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
+pub struct LocObjBody {
+	pub location: ExprLocation,
+	pub body: ObjBody,
+}
+
+#[cfg_attr(feature = "structdump", derive(Codegen))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Trace)]
 pub struct TableBody {
 	pub header: Vec<LocExpr>,
 	pub rows: Vec<Vec<LocExpr>>,
@@ -391,7 +399,7 @@ pub enum Expr {
 	/// Object: {a: 2}
 	Obj(ObjBody),
 	/// Object extension: var1 {b: 2}
-	ObjExtend(LocExpr, ObjBody),
+	ObjExtend(LocExpr, LocObjBody),
 
 	/// (obj)
 	Parened(LocExpr),
