@@ -470,7 +470,7 @@ parser! {
 		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
 
 		rule obj_inside_without_brackets(s: &ParserSettings) -> LocExpr =
-			start:position!() body:objinside(s) end:position!() {?
+			start:position!() body:objinside(s) end:position!() _ eof() {?
 				if body.is_empty() {
 					Err("Empty object")
 				} else {
@@ -490,6 +490,10 @@ pub type ParseError = peg::error::ParseError<peg::str::LineCol>;
 pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError> {
 	jsonnet_parser::jsonnet(str, settings)
 }
+pub fn parse_front_matter(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError> {
+	jsonnet_parser::jsonnet_or_obj_inside(str, settings)
+}
+
 /// Used for importstr values
 pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 	let len = str.len();
@@ -1037,6 +1041,18 @@ pub mod tests {
 				10
 			)
 		);
+	}
+
+	use test_case::test_case;
+	#[test_case("x: 4, y: 5" ; "fm object")]
+	#[test_case("{ x: 4, y: 5 }" ; "classic object")]
+	#[test_case("local x = 5; x" ; "classic expression")]
+	#[test_case("title: \"My example\",\ndata: { x: 1 + 2 }" ; "fm with expression")]
+	#[test_case("title: \"My example\",\ndata: { x: 1 + 2 }\n" ; "fm with expression trailing line end")]
+	fn parse_front_matter(input: &str) {
+		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
+		jsonnet_parser::jsonnet_or_obj_inside(input, &ParserSettings::new(file_name.clone()))
+			.unwrap();
 	}
 
 	#[test]
