@@ -3,7 +3,9 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData, IfSpecData, IndexBody, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldMemberHeader, FieldName,
+	ForSpecData, IfSpecData, IndexBody, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	Visibility,
 };
 use jrsonnet_types::ValType;
 
@@ -198,18 +200,20 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 	uctx: B,
 	field: &FieldMember,
 ) -> Result<()> {
-	let name = evaluate_field_name(ctx, &field.name)?;
+	let name = evaluate_field_name(ctx, &field.header.name)?;
 	let Some(name) = name else {
 		return Ok(());
 	};
 
 	match field {
 		FieldMember {
-			plus,
-			params: None,
-			visibility,
+			header: FieldMemberHeader {
+				plus,
+				params: None,
+				visibility,
+				..
+			},
 			value,
-			..
 		} => {
 			#[derive(Trace)]
 			struct UnboundValue<B: Trace> {
@@ -236,10 +240,12 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				})?;
 		}
 		FieldMember {
-			params: Some(params),
-			visibility,
+			header: FieldMemberHeader {
+				params: Some(params),
+				visibility,
+				..
+			},
 			value,
-			..
 		} => {
 			#[derive(Trace)]
 			struct UnboundMethod<B: Trace> {
@@ -445,7 +451,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index (IndexBody {indexable, parts }) => {
+		Index(IndexBody { indexable, parts }) => {
 			let mut parts = parts.iter();
 			let mut indexable = match &indexable {
 				// Cheaper to execute than creating object with overriden `this`
@@ -570,38 +576,25 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate(ctx, &returned.clone())?
 		}
 		Table(table) => {
-			let rows = 
-			table.rows.iter().cloned()
-				.map(|row| {
-					let mut location = row.get(0).unwrap().1.clone();
-					let last_loc = &row.last().unwrap().1;
-					location.2 = last_loc.2;
-					
-					let members: Vec<Member> = row.into_iter()
-						.enumerate()
-						.map(|(idx, value)| {
-							let header = table.header[idx].clone();
-							Member::Field(FieldMember {
-						        name: FieldName::Dyn(header),
-						        plus: false,
-						        params: None,
-						        visibility: Visibility::Normal,
-						        value,
-						    })
-						})
-						.collect();
+			let rows = table.rows.iter().cloned().map(|row| {
+				let mut location = row.get(0).unwrap().1.clone();
+				let last_loc = &row.last().unwrap().1;
+				location.2 = last_loc.2;
 
-					LocExpr(
-						Rc::new(Expr::Obj(ObjBody::MemberList(members))),
-						location
-					)
-				})
-			;
+				let members: Vec<Member> = row
+					.into_iter()
+					.enumerate()
+					.map(|(idx, value)| {
+						let header = table.header[idx].clone();
+						Member::Field(FieldMember { header, value })
+					})
+					.collect();
 
-			Val::Arr(ArrValue::expr(ctx,   rows
-				
-			))
-		},
+				LocExpr(Rc::new(Expr::Obj(ObjBody::MemberList(members))), location)
+			});
+
+			Val::Arr(ArrValue::expr(ctx, rows))
+		}
 		Arr(items) => {
 			if items.is_empty() {
 				Val::Arr(ArrValue::empty())

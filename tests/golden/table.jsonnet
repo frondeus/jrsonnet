@@ -1,4 +1,4 @@
-| "Name" | "Field" | "Field2" |
+| Name: | Field: | Field2: |
 | --- | --- | --- |
 | 1 | 2 | 3 |
 | 4 | 5 | 6 |

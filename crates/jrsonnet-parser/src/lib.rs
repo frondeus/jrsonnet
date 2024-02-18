@@ -192,21 +192,49 @@ parser! {
 			= ":::" {expr::Visibility::Unhide}
 			/ "::" {expr::Visibility::Hidden}
 			/ ":" {expr::Visibility::Normal}
+
+		rule field_header_with_opt_vis(s: &ParserSettings) -> expr::FieldMemberHeader
+			= name:field_name(s) _ plus:"+"? _ visibility:visibility()? _ {
+				let visibility = visibility.unwrap_or(expr::Visibility::Normal);
+				expr::FieldMemberHeader {
+					name,
+					plus: plus.is_some(),
+					params: None,
+					visibility,
+				}
+			}
+			/ name:field_name(s) _ "(" _ params:params(s) _ ")" visibility:visibility()? _ {
+				let visibility = visibility.unwrap_or(expr::Visibility::Normal);
+				expr::FieldMemberHeader {
+					name,
+					plus: false,
+					params: Some(params),
+					visibility,
+				}
+			}
+
+		pub rule field_header(s: &ParserSettings) -> expr::FieldMemberHeader
+			= name:field_name(s) _ plus:"+"? _ visibility:visibility() _ {
+				expr::FieldMemberHeader {
+					name,
+					plus: plus.is_some(),
+					params: None,
+					visibility,
+				}
+			}
+			/ name:field_name(s) _ "(" _ params:params(s) _ ")" _ visibility:visibility() {
+				expr::FieldMemberHeader {
+					name,
+					plus: false,
+					params: Some(params),
+					visibility,
+				}
+			}
+
 		pub rule field(s: &ParserSettings) -> expr::FieldMember
-			= name:field_name(s) _ plus:"+"? _ visibility:visibility() _ value:expr(s) {expr::FieldMember{
-				name,
-				plus: plus.is_some(),
-				params: None,
-				visibility,
-				value,
-			}}
-			/ name:field_name(s) _ "(" _ params:params(s) _ ")" _ visibility:visibility() _ value:expr(s) {expr::FieldMember{
-				name,
-				plus: false,
-				params: Some(params),
-				visibility,
-				value,
-			}}
+			=
+			header:field_header(s) _ value:expr(s) {expr::FieldMember{header, value}}
+
 		pub rule obj_local(s: &ParserSettings) -> BindSpec
 			= keyword("local") _ bind:bind(s) {bind}
 		pub rule member(s: &ParserSettings) -> expr::Member
@@ -276,11 +304,8 @@ parser! {
 			}
 		}
 
-		rule table_header(s: &ParserSettings) -> Vec<LocExpr> =
-			"|" _inline_whitespace() header:(expr(s) ++ pipe()) _inline_whitespace() "|" _inline_whitespace() "\n" {
-				// if (header.len() > 0) {
-				// 	// dbg!(&header);
-				// }
+		rule table_header(s: &ParserSettings) -> Vec<FieldMemberHeader> =
+			"|" _inline_whitespace() header:(field_header_with_opt_vis(s) ++ pipe()) _inline_whitespace() "|" _inline_whitespace() "\n" {
 				header
 			}
 
@@ -289,7 +314,6 @@ parser! {
 
 		rule table_row(s: &ParserSettings, len: usize) -> Vec<LocExpr> =
 			_inline_whitespace() pipe() _inline_whitespace() rows: (expr(s) **<{len}> pipe()) _inline_whitespace() "|" _inline_whitespace() {
-				// dbg!(&rows)
 				rows
 			}
 
@@ -539,7 +563,7 @@ pub mod tests {
 
 	#[test]
 	fn table() {
-		let input = r#"| "Name" | "Age" |
+		let input = r#"| Name | Age: |
 			| --- | --- |
 			| "John" | 20 |"#;
 		assert_eq!(
@@ -547,23 +571,33 @@ pub mod tests {
 			el!(
 				Expr::Table(TableBody {
 					header: vec![
-						el!(Expr::Str("Name".into()), 2, 8),
-						el!(Expr::Str("Age".into()), 11, 16),
+						FieldMemberHeader {
+							name: FieldName::Fixed("Name".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						},
+						FieldMemberHeader {
+							name: FieldName::Fixed("Age".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						}
 					],
 					rows: vec![vec![
-						el!(Expr::Str("John".into()), 41, 47),
-						el!(Expr::Num(20.0), 50, 52),
+						el!(Expr::Str("John".into()), 38, 44),
+						el!(Expr::Num(20.0), 47, 49),
 					]],
 				}),
 				0,
-				54
+				51
 			),
 		)
 	}
 
 	#[test]
 	fn local_table() {
-		let input = r#"local x = | "Name" | "Age" |
+		let input = r#"local x = | Name:: | Age::: |
 			| --- | --- |
 			| "John" | 20 |;null"#;
 		assert_eq!(
@@ -575,22 +609,32 @@ pub mod tests {
 						value: el!(
 							Expr::Table(TableBody {
 								header: vec![
-									el!(Expr::Str("Name".into()), 12, 18),
-									el!(Expr::Str("Age".into()), 21, 26),
+									FieldMemberHeader {
+										name: FieldName::Fixed("Name".into()),
+										plus: false,
+										params: None,
+										visibility: Visibility::Hidden,
+									},
+									FieldMemberHeader {
+										name: FieldName::Fixed("Age".into()),
+										plus: false,
+										params: None,
+										visibility: Visibility::Unhide,
+									},
 								],
 								rows: vec![vec![
-									el!(Expr::Str("John".into()), 51, 57),
-									el!(Expr::Num(20.0), 60, 62),
+									el!(Expr::Str("John".into()), 52, 58),
+									el!(Expr::Num(20.0), 61, 63),
 								]],
 							}),
 							10,
-							64
+							65
 						)
 					}],
-					el!(Expr::Literal(LiteralType::Null), 65, 69)
+					el!(Expr::Literal(LiteralType::Null), 66, 70)
 				),
 				0,
-				69
+				70
 			),
 		)
 	}
@@ -663,6 +707,16 @@ pub mod tests {
 			parse!("{}"),
 			el!(Expr::Obj(ObjBody::MemberList(vec![])), 0, 2)
 		);
+	}
+
+	#[test]
+	fn object_fields() {
+		parse!("{ hidden:: 1 }");
+		parse!("{ functionHidden(a, b):: a + b }");
+		parse!("{ visible: 2 }");
+		parse!("{ functionVisible(a, b): a + b }");
+		parse!("{ forced::: 3 }");
+		parse!("{ functionForced(a, b)::: a + b }");
 	}
 
 	#[test]
@@ -925,17 +979,21 @@ pub mod tests {
 			el!(
 				Expr::Obj(ObjBody::MemberList(vec![
 					Member::Field(FieldMember {
-						name: FieldName::Fixed("x".into()),
-						plus: false,
-						params: None,
-						visibility: Visibility::Normal,
+						header: FieldMemberHeader {
+							name: FieldName::Fixed("x".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						},
 						value: el!(Expr::Num(4.0), 5, 6),
 					}),
 					Member::Field(FieldMember {
-						name: FieldName::Fixed("y".into()),
-						plus: false,
-						params: None,
-						visibility: Visibility::Normal,
+						header: FieldMemberHeader {
+							name: FieldName::Fixed("y".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						},
 						value: el!(Expr::Num(5.0), 11, 12),
 					}),
 				])),
@@ -957,17 +1015,21 @@ pub mod tests {
 			el!(
 				Expr::Obj(ObjBody::MemberList(vec![
 					Member::Field(FieldMember {
-						name: FieldName::Fixed("x".into()),
-						plus: false,
-						params: None,
-						visibility: Visibility::Normal,
+						header: FieldMemberHeader {
+							name: FieldName::Fixed("x".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						},
 						value: el!(Expr::Num(4.0), 3, 4),
 					}),
 					Member::Field(FieldMember {
-						name: FieldName::Fixed("y".into()),
-						plus: false,
-						params: None,
-						visibility: Visibility::Normal,
+						header: FieldMemberHeader {
+							name: FieldName::Fixed("y".into()),
+							plus: false,
+							params: None,
+							visibility: Visibility::Normal,
+						},
 						value: el!(Expr::Num(5.0), 9, 10),
 					}),
 				])),
@@ -1002,10 +1064,12 @@ pub mod tests {
 										value: el!(Num(1.0), 15, 16)
 									}),
 									Member::Field(FieldMember {
-										name: FieldName::Fixed("x".into()),
-										plus: false,
-										params: None,
-										visibility: Visibility::Normal,
+										header: FieldMemberHeader {
+											name: FieldName::Fixed("x".into()),
+											plus: false,
+											params: None,
+											visibility: Visibility::Normal,
+										},
 										value: el!(Var("x".into()), 21, 22),
 									})
 								])

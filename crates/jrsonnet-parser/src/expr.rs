@@ -15,7 +15,7 @@ use crate::source::Source;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "structdump", derive(Codegen))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Clone)]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
@@ -49,12 +49,19 @@ pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
-pub struct FieldMember {
+#[derive(Debug, PartialEq, Trace, Clone)]
+pub struct FieldMemberHeader {
 	pub name: FieldName,
 	pub plus: bool,
 	pub params: Option<ParamsDesc>,
 	pub visibility: Visibility,
+}
+
+#[cfg_attr(feature = "structdump", derive(Codegen))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Trace)]
+pub struct FieldMember {
+	pub header: FieldMemberHeader,
 	pub value: LocExpr,
 }
 
@@ -348,7 +355,7 @@ pub struct LocObjBody {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct TableBody {
-	pub header: Vec<LocExpr>,
+	pub header: Vec<FieldMemberHeader>,
 	pub rows: Vec<Vec<LocExpr>>,
 }
 
