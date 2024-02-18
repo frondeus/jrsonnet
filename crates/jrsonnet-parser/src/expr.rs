@@ -327,6 +327,15 @@ pub enum ObjBody {
 	ObjComp(ObjComp),
 }
 
+impl ObjBody {
+	pub fn is_empty(&self) -> bool {
+		match self {
+			Self::MemberList(v) => v.is_empty(),
+			Self::ObjComp(_) => false,
+		}
+	}
+}
+
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
@@ -453,12 +462,12 @@ impl Expr {
 
 	pub fn is_atom(&self) -> bool {
 		match self {
-		    Expr::Literal(LiteralType::Null) |
-			Expr::Literal(LiteralType::True) |
-			Expr::Literal(LiteralType::False) |
-		    Expr::Str(_) |
-		    Expr::Num(_) => true,
-			_ => false
+			Expr::Literal(LiteralType::Null)
+			| Expr::Literal(LiteralType::True)
+			| Expr::Literal(LiteralType::False)
+			| Expr::Str(_)
+			| Expr::Num(_) => true,
+			_ => false,
 		}
 	}
 }

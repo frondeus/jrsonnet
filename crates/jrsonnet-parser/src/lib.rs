@@ -16,7 +16,7 @@ pub use source::{Source, SourceDirectory, SourceFile, SourcePath, SourcePathT, S
 pub struct ParserSettings {
 	pub source: Source,
 	pub table_mode: bool,
-	pub in_table: bool
+	pub in_table: bool,
 }
 
 impl ParserSettings {
@@ -24,17 +24,16 @@ impl ParserSettings {
 		Self {
 			source,
 			table_mode: true,
-			in_table: false
+			in_table: false,
 		}
 	}
 	fn in_table(&self) -> Self {
 		Self {
 			source: self.source.clone(),
 			table_mode: false,
-			in_table: true
+			in_table: true,
 		}
 	}
-	
 }
 
 macro_rules! expr_bin {
@@ -256,14 +255,14 @@ parser! {
 		// 4. All rows must have the same number of columns as the header
 		// 5. That also allows parser to know when table is ended
 		// Example:
-		//           | Name | Age | // Note that the `|` comes 
+		//           | Name | Age | // Note that the `|` comes
 		// | --- | --- | // Still valid table even if there is no space between first `|`
-		// | John | 20 | 
-		pub rule table_expr(s: &ParserSettings) -> Expr = 
+		// | John | 20 |
+		pub rule table_expr(s: &ParserSettings) -> Expr =
 			table_guard(s)
 			table: table_expr_inner(&s.in_table()) { table }
 
-		rule table_expr_inner(s: &ParserSettings) -> Expr = 
+		rule table_expr_inner(s: &ParserSettings) -> Expr =
 			header: table_header(s)
 			table_header_delimiter(header.len()) "\n"
 			rows:(table_row(s, header.len())) ++ "\n"
@@ -278,11 +277,11 @@ parser! {
 		}
 
 		rule table_header(s: &ParserSettings) -> Vec<LocExpr> =
-			"|" _inline_whitespace() header:(expr(s) ++ pipe()) _inline_whitespace() "|" _inline_whitespace() "\n" { 
+			"|" _inline_whitespace() header:(expr(s) ++ pipe()) _inline_whitespace() "|" _inline_whitespace() "\n" {
 				// if (header.len() > 0) {
 				// 	// dbg!(&header);
 				// }
-				header 
+				header
 			}
 
 		rule table_header_delimiter(len: usize) -> () =
@@ -357,7 +356,7 @@ parser! {
 			= quiet!{ x() } / expected!("<binary op>")
 
 		rule binop_not_table(s: &ParserSettings, x: rule<()> ) -> ()
-			= 
+			=
 			quiet!{ binop_not_table_guard(s) x() } / expected!("<binary op>")
 
 		rule binop_not_table_guard(s: &ParserSettings) -> ()
@@ -378,7 +377,7 @@ parser! {
 		use UnaryOpType::*;
 
 		rule table_loc_expr(s: &ParserSettings) -> LocExpr
-			= 
+			=
 			start:position!() v:table_expr(s) end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
 
 		rule expr(s: &ParserSettings) -> LocExpr
@@ -445,6 +444,21 @@ parser! {
 		}}
 
 		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
+
+		rule obj_inside_without_brackets(s: &ParserSettings) -> LocExpr =
+			start:position!() body:objinside(s) end:position!() {?
+				if body.is_empty() {
+					Err("Empty object")
+				} else {
+					Ok(LocExpr(Rc::new(Expr::Obj(body)), ExprLocation(s.source.clone(), start as u32, end as u32)))
+				}
+			}
+
+		rule jsonnet_or_obj_inside_inner(s: &ParserSettings) -> LocExpr =
+			obj_inside_without_brackets(s) / expr(s)
+
+		pub rule jsonnet_or_obj_inside(s: &ParserSettings) -> LocExpr =
+			_ e:jsonnet_or_obj_inside_inner(s) _ { e }
 	}
 }
 
@@ -464,18 +478,17 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 #[cfg(test)]
 pub mod tests {
 	use jrsonnet_interner::IStr;
+	use pretty_assertions::assert_eq;
 	use BinaryOpType::*;
 
 	use super::{expr::*, parse};
-	use pretty_assertions::assert_eq;
-	use crate::{source::Source, ParserSettings};
+	use crate::{jsonnet_parser, source::Source, ParserSettings};
 
 	macro_rules! parse {
 		($s:expr) => {
 			parse(
 				$s,
-				&ParserSettings::new( Source::new_virtual("<test>".into(), IStr::empty()), )
-				,
+				&ParserSettings::new(Source::new_virtual("<test>".into(), IStr::empty())),
 			)
 			.unwrap()
 		};
@@ -500,7 +513,7 @@ pub mod tests {
 				Source::new_virtual("<test>".into(), IStr::empty()),
 				$from,
 				$to,
-			),
+			)
 		};
 	}
 
@@ -531,16 +544,20 @@ pub mod tests {
 			| "John" | 20 |"#;
 		assert_eq!(
 			parse!(&input),
-			el!(Expr::Table(TableBody {
-				header: vec![
-					el!(Expr::Str("Name".into()), 2, 8),
-					el!(Expr::Str("Age".into()), 11, 16),
-				],
-				rows: vec![vec![
-					el!(Expr::Str("John".into()), 41, 47),
-					el!(Expr::Num(20.0), 50, 52),
-				]],
-			}), 0, 54),
+			el!(
+				Expr::Table(TableBody {
+					header: vec![
+						el!(Expr::Str("Name".into()), 2, 8),
+						el!(Expr::Str("Age".into()), 11, 16),
+					],
+					rows: vec![vec![
+						el!(Expr::Str("John".into()), 41, 47),
+						el!(Expr::Num(20.0), 50, 52),
+					]],
+				}),
+				0,
+				54
+			),
 		)
 	}
 
@@ -552,8 +569,8 @@ pub mod tests {
 		assert_eq!(
 			parse!(&input),
 			el!(
-				Expr::LocalExpr(vec![
-					BindSpec::Field {
+				Expr::LocalExpr(
+					vec![BindSpec::Field {
 						into: Destruct::Full("x".into()),
 						value: el!(
 							Expr::Table(TableBody {
@@ -566,12 +583,15 @@ pub mod tests {
 									el!(Expr::Num(20.0), 60, 62),
 								]],
 							}),
-							10, 64
+							10,
+							64
 						)
-					}
-				], 
-				el!(Expr::Literal(LiteralType::Null), 65, 69)
-			), 0, 69),
+					}],
+					el!(Expr::Literal(LiteralType::Null), 65, 69)
+				),
+				0,
+				69
+			),
 		)
 	}
 
@@ -892,13 +912,79 @@ pub mod tests {
 	}
 
 	#[test]
+	fn parse_full_object() {
+		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
+		let expr = jsonnet_parser::jsonnet_or_obj_inside(
+			"{ x: 4, y: 5 }",
+			&ParserSettings::new(file_name),
+		)
+		.unwrap();
+
+		assert_eq!(
+			expr,
+			el!(
+				Expr::Obj(ObjBody::MemberList(vec![
+					Member::Field(FieldMember {
+						name: FieldName::Fixed("x".into()),
+						plus: false,
+						params: None,
+						visibility: Visibility::Normal,
+						value: el!(Expr::Num(4.0), 5, 6),
+					}),
+					Member::Field(FieldMember {
+						name: FieldName::Fixed("y".into()),
+						plus: false,
+						params: None,
+						visibility: Visibility::Normal,
+						value: el!(Expr::Num(5.0), 11, 12),
+					}),
+				])),
+				0,
+				14
+			)
+		);
+	}
+
+	#[test]
+	fn parse_top_object() {
+		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
+		let expr =
+			jsonnet_parser::jsonnet_or_obj_inside("x: 4, y: 5", &ParserSettings::new(file_name))
+				.unwrap();
+
+		assert_eq!(
+			expr,
+			el!(
+				Expr::Obj(ObjBody::MemberList(vec![
+					Member::Field(FieldMember {
+						name: FieldName::Fixed("x".into()),
+						plus: false,
+						params: None,
+						visibility: Visibility::Normal,
+						value: el!(Expr::Num(4.0), 3, 4),
+					}),
+					Member::Field(FieldMember {
+						name: FieldName::Fixed("y".into()),
+						plus: false,
+						params: None,
+						visibility: Visibility::Normal,
+						value: el!(Expr::Num(5.0), 9, 10),
+					}),
+				])),
+				0,
+				10
+			)
+		);
+	}
+
+	#[test]
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
 		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
-			&ParserSettings::new (file_name),
+			&ParserSettings::new(file_name),
 		)
 		.unwrap();
 		assert_eq!(
@@ -909,20 +995,20 @@ pub mod tests {
 						ObjExtend(
 							el!(Obj(ObjBody::MemberList(vec![])), 0, 2),
 							LocObjBody {
-								location: loc!(3, 20),
+								location: loc!(3, 24),
 								body: ObjBody::MemberList(vec![
-								Member::BindStmt(BindSpec::Field {
-									into: Destruct::Full("x".into()),
-									value: el!(Num(1.0), 15, 16)
-								}),
-								Member::Field(FieldMember {
-									name: FieldName::Fixed("x".into()),
-									plus: false,
-									params: None,
-									visibility: Visibility::Normal,
-									value: el!(Var("x".into()), 21, 22),
-								})
-							])
+									Member::BindStmt(BindSpec::Field {
+										into: Destruct::Full("x".into()),
+										value: el!(Num(1.0), 15, 16)
+									}),
+									Member::Field(FieldMember {
+										name: FieldName::Fixed("x".into()),
+										plus: false,
+										params: None,
+										visibility: Visibility::Normal,
+										value: el!(Var("x".into()), 21, 22),
+									})
+								])
 							}
 						),
 						0,
